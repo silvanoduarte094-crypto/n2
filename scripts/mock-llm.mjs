@@ -6,18 +6,32 @@ import http from 'node:http';
  */
 const PORT = Number(process.env.MOCK_LLM_PORT || 11434);
 
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers':
+    'authorization, content-type, x-api-key, anthropic-version, anthropic-dangerous-direct-browser-access',
+  'access-control-expose-headers': 'x-n2-bridge',
+  'access-control-max-age': '86400',
+};
+
 function sse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
 const server = http.createServer((req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS);
+    res.end();
+    return;
+  }
   if (req.method === 'GET' && req.url?.endsWith('/models')) {
-    res.writeHead(200, { 'content-type': 'application/json' });
+    res.writeHead(200, { 'content-type': 'application/json', ...CORS });
     res.end(JSON.stringify({ data: [{ id: 'llama3.2' }, { id: 'mock-agent' }] }));
     return;
   }
   if (req.method !== 'POST' || !req.url?.includes('chat/completions')) {
-    res.writeHead(404, { 'content-type': 'application/json' });
+    res.writeHead(404, { 'content-type': 'application/json', ...CORS });
     res.end(JSON.stringify({ error: { message: 'not found' } }));
     return;
   }
@@ -48,6 +62,7 @@ const server = http.createServer((req, res) => {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache',
       connection: 'keep-alive',
+      ...CORS,
     });
 
     if (wantsConnector) {

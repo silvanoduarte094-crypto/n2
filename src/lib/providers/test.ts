@@ -1,5 +1,6 @@
 import type { Provider, Settings } from '../../types';
 import { joinUrl, proxyFetch, responseError } from './http';
+import { GITHUB_DIRECT_HINT } from '../../config';
 
 export async function testProvider(settings: Settings, provider: Provider): Promise<string> {
   if (!provider.baseUrl.trim()) throw new Error('Base URL vazia.');
@@ -20,6 +21,8 @@ export async function testProvider(settings: Settings, provider: Provider): Prom
         max_tokens: 4,
         messages: [{ role: 'user', content: 'ping' }],
       }),
+      directOk: provider.direct !== false,
+      providerLabel: provider.name,
     });
     if (!response.ok) throw new Error(await responseError(response));
     return 'Conexão OK — Anthropic respondeu.';
@@ -30,7 +33,11 @@ export async function testProvider(settings: Settings, provider: Provider): Prom
       provider.baseUrl,
       `v1beta/models?key=${encodeURIComponent(provider.apiKey)}`,
     );
-    const response = await proxyFetch(settings, url, { method: 'GET' });
+    const response = await proxyFetch(settings, url, {
+      method: 'GET',
+      directOk: provider.direct !== false,
+      providerLabel: provider.name,
+    });
     if (!response.ok) throw new Error(await responseError(response));
     const data = (await response.json()) as { models?: unknown[] };
     return `Conexão OK — ${data.models?.length || 0} modelos visíveis.`;
@@ -50,6 +57,9 @@ export async function testProvider(settings: Settings, provider: Provider): Prom
       ...(provider.headers || {}),
     },
     body: JSON.stringify(body),
+    directOk: provider.direct !== false,
+    providerLabel: provider.name,
+    directHint: provider.id === 'github' ? GITHUB_DIRECT_HINT : undefined,
   });
   if (!response.ok) throw new Error(await responseError(response));
   return 'Conexão OK — o modelo respondeu.';

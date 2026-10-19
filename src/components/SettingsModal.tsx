@@ -25,11 +25,13 @@ import { useStore, type SettingsTab } from '../store/useStore';
 import {
   ACCENTS,
   APP_VERSION,
+  CODESPACES_URL,
   DEFAULT_SYSTEM_PROMPT,
   getProvider,
 } from '../config';
 import type { Connector, Provider } from '../types';
 import { testProvider } from '../lib/providers/test';
+import { resolveConnection } from '../lib/providers/http';
 import { cn, formatBytes, uid } from '../lib/utils';
 import { Field, IconButton, Modal, Segmented, Spinner, Toggle } from './ui';
 import { Logo } from './Logo';
@@ -153,6 +155,18 @@ function ProviderCard({
               ))}
             </datalist>
           </Field>
+          <div className="toggle-stack">
+            <Toggle
+              checked={provider.direct !== false}
+              onChange={(direct) => updateProvider(provider.id, { direct })}
+              label="Chamadas diretas do navegador (CORS)"
+              description={
+                provider.id === 'github'
+                  ? 'GitHub Models não envia cabeçalhos CORS: mantenha desligado e use o bridge (local ou Codespaces).'
+                  : 'Ligue para falar com o provedor sem bridge. Desligue se o provedor bloquear chamadas do navegador.'
+              }
+            />
+          </div>
           <div className="provider-actions">
             <button
               type="button"
@@ -466,6 +480,8 @@ export function SettingsModal() {
 
   const [expandedProvider, setExpandedProvider] = useState<string | null>(settings.activeProviderId);
   const provider = getProvider(settings);
+  const connectionMode = settings.connectionMode || 'auto';
+  const resolvedConnection = resolveConnection(settings);
 
   useEffect(() => {
     if (open) setExpandedProvider(settings.activeProviderId);
@@ -575,8 +591,30 @@ export function SettingsModal() {
                 />
               </div>
               <Field
+                label="Conexão com os modelos"
+                hint={
+                  connectionMode === 'bridge'
+                    ? 'Todo o tráfego passa pelo bridge (local ou Proxy URL). É o único caminho para GitHub Models.'
+                    : connectionMode === 'direct'
+                      ? 'As requisições saem direto do navegador. Funciona com OpenAI, Anthropic, Gemini e Ollama que permitam CORS.'
+                      : resolvedConnection === 'bridge'
+                        ? 'Automático: com bridge disponível (local ou Proxy URL), o tráfego passa por ele.'
+                        : 'Automático: sem bridge nesta página, as chamadas saem direto do navegador (o provedor precisa permitir CORS).'
+                }
+              >
+                <Segmented
+                  options={[
+                    { value: 'auto', label: 'Automático' },
+                    { value: 'bridge', label: 'Bridge' },
+                    { value: 'direct', label: 'Direto' },
+                  ]}
+                  value={connectionMode}
+                  onChange={(connectionMode) => updateSettings({ connectionMode })}
+                />
+              </Field>
+              <Field
                 label="Proxy / bridge"
-                hint="Deixe vazio para usar o bridge local. Em GitHub Pages, informe a URL do seu proxy."
+                hint="Deixe vazio para usar o bridge embutido (app completo). Na versão web, cole aqui a URL do bridge no Codespaces ou de outro proxy seu."
               >
                 <input
                   value={settings.proxyUrl}
@@ -585,6 +623,16 @@ export function SettingsModal() {
                   placeholder="https://seu-proxy.exemplo.com"
                 />
               </Field>
+              <div className="row-actions">
+                <a
+                  className="btn btn-ghost btn-sm"
+                  href={CODESPACES_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink size={14} /> Abrir bridge gratuito no Codespaces
+                </a>
+              </div>
               <Field
                 label="Token do proxy"
                 hint="Opcional. Use o mesmo valor de N2_PROXY_TOKEN no servidor para proteger um bridge remoto."
@@ -768,6 +816,7 @@ export function SettingsModal() {
                       temperature: 0.7,
                       maxTokens: 4096,
                       proxyUrl: '',
+                      connectionMode: 'auto',
                     });
                     showToast('Configurações restauradas.', 'info');
                   }

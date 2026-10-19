@@ -1,6 +1,6 @@
 # Roadmap do N2
 
-Estado atual: **v0.1.0 — MVP completo e utilizável**. Abaixo, o que já existe e o
+Estado atual: **v0.1.1 — MVP completo + conexão web direta/bridge**. Abaixo, o que já existe e o
 que vem depois, na ordem de prioridade.
 
 ## Fase 1 — MVP (concluída)
@@ -21,6 +21,7 @@ que vem depois, na ordem de prioridade.
 - [x] IndexedDB, exportar/importar backup
 - [x] Conectores REST, webhook e MCP (registro) + conector MYRKAVELL
 - [x] Bridge local com proxy de streaming, CORS e token opcional
+- [x] Modos de conexão Auto/Bridge/Direto + bridge gratuito via Codespaces
 - [x] Empacotamento portátil para Windows e workflows de CI/Release
 
 ## Fase 2 — Profundidade (próximos passos)

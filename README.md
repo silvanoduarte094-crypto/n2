@@ -13,6 +13,7 @@ Ollama.
 - **Telemetria:** nenhuma
 - **Dados:** IndexedDB no seu navegador + bridge local em `127.0.0.1`
 - **Distribuição:** GitHub Pages (interface) e GitHub Releases (app completo)
+- **Conexão:** chamadas diretas no navegador (CORS) ou via bridge local/Codespaces
 
 ---
 
@@ -56,11 +57,19 @@ Não precisa instalar nada — nem Node, nem Docker.
 https://silvanoduarte094-crypto.github.io/n2/
 ```
 
-A versão web não inclui o bridge local. Para usá-la com um provedor real,
-configure uma **Proxy URL** nas configurações (veja
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#bridge-local-e-proxy-remoto)) ou rode o
-bridge em outra máquina. Sem proxy, você ainda pode usar Ollama em
-`http://127.0.0.1:11434` se o navegador permitir.
+A versão web fala **direto do navegador** com OpenAI, Anthropic, Gemini e Ollama
+(provedores que liberam CORS) — basta colar a chave nas configurações. A conexão é
+escolhida em **Configurações → Geral → Conexão** (Automático, Bridge ou Direto).
+
+Dois casos exigem um bridge:
+
+- **GitHub Models** — a API não envia cabeçalhos CORS.
+- Provedores que bloqueiam chamadas do navegador.
+
+Para esses casos, abra um **bridge gratuito no Codespaces** com um clique
+(`https://codespaces.new/silvanoduarte094-crypto/n2`), copie a URL e o token
+exibidos no terminal e cole em **Configurações → Geral → Proxy / bridge**.
+O passo a passo está em [docs/WEB.md](docs/WEB.md).
 
 ### Opção 3 — a partir do código
 
@@ -127,7 +136,10 @@ encaminha as requisições e não grava cabeçalhos de autorização.
 4. Clique em **Testar conexão**.
 
 O endpoint usado é `https://models.github.ai/inference`. Ele não envia cabeçalhos
-CORS para o navegador, por isso o N2 usa o bridge local por padrão.
+CORS para o navegador: no **app completo** o bridge local cuida disso; na **versão
+web** (GitHub Pages), abra um bridge no Codespaces — veja
+[docs/WEB.md](docs/WEB.md). OpenAI, Anthropic, Gemini e Ollama funcionam direto no
+navegador, sem bridge.
 
 ---
 

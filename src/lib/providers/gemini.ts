@@ -115,6 +115,8 @@ export async function* streamGemini(
     },
     body: JSON.stringify(body),
     signal: options.signal,
+    directOk: provider.direct !== false,
+    providerLabel: provider.name,
   });
   if (!response.ok) throw new Error(await responseError(response));
   if (!response.body) throw new Error('O provedor não retornou um stream.');

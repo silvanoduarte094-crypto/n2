@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { Provider } from '../types';
+import { CODESPACES_URL } from '../config';
+import { resolveConnection } from '../lib/providers/http';
 import { cn } from '../lib/utils';
 import { Logo } from './Logo';
 import { Field, Toggle } from './ui';
@@ -160,16 +162,28 @@ export function Onboarding() {
 
             <div className="onboarding-provider-form">
               {selected.id === 'github' && (
-                <div className="inline-tip">
-                  <KeyRound size={16} />
-                  <span>
-                    Crie um token em{' '}
-                    <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">
-                      github.com/settings/tokens
-                    </a>{' '}
-                    com a permissão <code>models:read</code>. Cole abaixo.
-                  </span>
-                </div>
+                <>
+                  <div className="inline-tip">
+                    <KeyRound size={16} />
+                    <span>
+                      Crie um token em{' '}
+                      <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">
+                        github.com/settings/tokens
+                      </a>{' '}
+                      com a permissão <code>models:read</code>. Cole abaixo.
+                    </span>
+                  </div>
+                  {resolveConnection(settings) === 'direct' && (
+                    <p className="form-warning">
+                      Na versão web, GitHub Models precisa de um bridge (a API não libera CORS).{' '}
+                      <a href={CODESPACES_URL} target="_blank" rel="noopener noreferrer">
+                        Abra um bridge grátis no Codespaces
+                      </a>{' '}
+                      e cole a URL em Configurações → Proxy / bridge — ou escolha OpenAI, Anthropic,
+                      Gemini ou Ollama, que aceitam chamadas diretas do navegador.
+                    </p>
+                  )}
+                </>
               )}
               <Field label="Base URL">
                 <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} spellCheck={false} />

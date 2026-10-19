@@ -1,5 +1,8 @@
 export type ProviderKind = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
+/** How model traffic leaves the app: auto picks bridge or direct browser calls. */
+export type ConnectionMode = 'auto' | 'bridge' | 'direct';
+
 export interface Provider {
   id: string;
   name: string;
@@ -11,6 +14,8 @@ export interface Provider {
   headers?: Record<string, string>;
   enabled: boolean;
   notes?: string;
+  /** `false` blocks direct browser calls (provider without CORS, e.g. GitHub Models). */
+  direct?: boolean;
 }
 
 export interface Attachment {
@@ -112,6 +117,7 @@ export interface Settings {
   fontSize: 'sm' | 'md' | 'lg';
   proxyUrl: string;
   proxyToken: string;
+  connectionMode: ConnectionMode;
   connectors: Connector[];
   onboardingComplete: boolean;
   hasGithubToken?: boolean;

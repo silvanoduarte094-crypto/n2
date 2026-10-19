@@ -2,9 +2,17 @@ import type { Provider, Settings } from './types';
 
 export const APP_NAME = 'N2';
 export const APP_TAGLINE = 'Núcleo de Inteligência';
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.1.1';
 export const DB_NAME = 'n2-db';
 export const SCHEMA_VERSION = 1;
+
+export const REPO_URL = 'https://github.com/silvanoduarte094-crypto/n2';
+export const RELEASES_URL = `${REPO_URL}/releases/latest`;
+export const CODESPACES_URL = `https://codespaces.new/silvanoduarte094-crypto/n2`;
+
+/** Shown when GitHub Models is asked to answer without a bridge (no CORS upstream). */
+export const GITHUB_DIRECT_HINT =
+  'GitHub Models não permite chamadas diretas do navegador (sem CORS). Use o app completo com bridge local, o bridge gratuito via Codespaces ou troque para OpenAI, Anthropic, Gemini ou Ollama — esses aceitam chamadas diretas.';
 
 export const DEFAULT_SYSTEM_PROMPT = `Você é o N2, um núcleo de inteligência pessoal, direto e útil.
 
@@ -37,7 +45,8 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     model: 'openai/gpt-4.1',
     models: githubModels,
     enabled: true,
-    notes: 'Use um token pessoal do GitHub com permissão models:read.',
+    direct: false,
+    notes: 'Use um token pessoal do GitHub com permissão models:read. No navegador exige bridge (local ou Codespaces).',
   },
   {
     id: 'openai',
@@ -48,6 +57,7 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     model: 'gpt-4o-mini',
     models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1', 'gpt-4.1-mini'],
     enabled: true,
+    direct: true,
   },
   {
     id: 'anthropic',
@@ -58,6 +68,7 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     model: 'claude-sonnet-4-5',
     models: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-haiku-4-5'],
     enabled: true,
+    direct: true,
   },
   {
     id: 'gemini',
@@ -68,6 +79,7 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     model: 'gemini-2.5-flash',
     models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
     enabled: true,
+    direct: true,
   },
   {
     id: 'ollama',
@@ -78,7 +90,8 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     model: 'llama3.2',
     models: ['llama3.2', 'qwen2.5', 'mistral', 'gemma3'],
     enabled: true,
-    notes: 'Rode `ollama serve` e baixe um modelo com `ollama pull llama3.2`.',
+    direct: true,
+    notes: 'Rode `ollama serve` e baixe um modelo com `ollama pull llama3.2`. Direto no navegador, permita a origem com OLLAMA_ORIGINS.',
   },
 ];
 
@@ -102,6 +115,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontSize: 'md',
   proxyUrl: '',
   proxyToken: '',
+  connectionMode: 'auto',
   connectors: [],
   onboardingComplete: false,
 };

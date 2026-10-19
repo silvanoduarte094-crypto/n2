@@ -8,6 +8,7 @@ release/
 
 # runtime portable (local only)
 .tools/
+.codespace-token
 
 # logs / misc
 *.log

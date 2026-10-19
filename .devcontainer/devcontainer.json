@@ -1,0 +1,25 @@
+{
+  "name": "N2 Bridge",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm",
+  "postCreateCommand": "npm ci",
+  "postStartCommand": "bash scripts/codespace-bridge.sh",
+  "forwardPorts": [7331],
+  "portsAttributes": {
+    "7331": {
+      "label": "N2 Bridge",
+      "visibility": "public",
+      "onAutoForward": "silent"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "hostRequirements": {
+    "cpus": 2
+  },
+  "remoteUser": "node"
+}

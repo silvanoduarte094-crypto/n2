@@ -138,14 +138,24 @@ Decisões de segurança:
   `cookie`, `sec-*`).
 - Corpo máximo de 12 MB e timeout de 180 s por requisição.
 - Cabeçalhos de CORS do upstream não são repassados; o bridge define os seus.
+- Toda resposta do bridge leva `x-n2-bridge: 1` (exposto por CORS), para o app
+  diferenciar "bridge ausente" de um erro real do provedor.
 
-### Bridge local e proxy remoto
+### Modos de conexão
 
-O frontend escolhe o destino assim:
+O frontend escolhe o destino em `src/lib/providers/http.ts`:
 
-1. `settings.proxyUrl` vazio → `/api/proxy` no mesmo host (bridge local).
-2. `settings.proxyUrl` preenchido → `<proxyUrl>/api/proxy` (bridge remoto).
-3. Se o bridge não responder com 404, a UI orienta a configurar uma Proxy URL.
+1. `connectionMode: 'bridge'` → sempre via bridge (`/api/proxy` local ou `<proxyUrl>/api/proxy`).
+2. `connectionMode: 'direct'` → chamadas diretas do navegador (`fetch` CORS).
+3. `connectionMode: 'auto'` (padrão) → usa o bridge quando existe (app completo ou
+   `proxyUrl` configurada); em páginas estáticas sem proxy, cai para o modo direto.
+
+No modo `auto`, se o bridge não responder (erro de rede, ou 404/50x sem o marcador
+`x-n2-bridge`), a requisição é repetida direto do navegador quando o provedor
+permite CORS. Provedores marcados com `direct: false` (ex.: GitHub Models) mostram
+uma orientação clara em vez de tentar uma chamada condenada. No navegador, apenas
+OpenAI, Anthropic, Gemini e Ollama (com `OLLAMA_ORIGINS`) funcionam direto — veja
+[docs/WEB.md](WEB.md).
 
 Para proteger um bridge remoto:
 
@@ -154,6 +164,9 @@ N2_PROXY_TOKEN=um-segredo-forte N2_HOST=0.0.0.0 npm start
 ```
 
 E no app: **Configurações → Geral → Token do proxy** com o mesmo valor.
+
+Para subir um bridge pronto no Codespaces (sem instalar nada), use o botão em
+**Configurações → Geral** ou rode `.devcontainer` direto no repositório.
 
 ## Persistência
 

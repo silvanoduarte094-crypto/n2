@@ -7,6 +7,7 @@ import type {
   Usage,
 } from '../../types';
 import { iterateSSE, joinUrl, proxyFetch, responseError } from './http';
+import { GITHUB_DIRECT_HINT } from '../../config';
 
 export interface StreamOptions {
   settings: Settings;
@@ -99,6 +100,9 @@ export async function* streamOpenAI(
     headers,
     body: JSON.stringify(body),
     signal: options.signal,
+    directOk: provider.direct !== false,
+    providerLabel: provider.name,
+    directHint: provider.id === 'github' ? GITHUB_DIRECT_HINT : undefined,
   });
 
   if (!response.ok) {
