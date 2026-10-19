@@ -62,5 +62,5 @@ jobs:
             release/n2-windows-x64.zip
             release/n2-windows-x64.zip.sha256
             release/n2-source.zip
-          generate_release_notes: true
+          body_path: docs/RELEASE-NOTES-v0.1.0.md
           fail_on_unmatched_files: true
