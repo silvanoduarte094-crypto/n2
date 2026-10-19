@@ -1,0 +1,51 @@
+{
+  "name": "n2",
+  "private": true,
+  "version": "0.1.0",
+  "description": "N2 — local-first AI workbench with agents, memory, voice and connectors.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:all": "concurrently -k \"npm:dev:server\" \"npm:dev\"",
+    "build": "tsc --noEmit && vite build",
+    "build:server": "node scripts/build-server.mjs",
+    "build:all": "npm run build && npm run build:server",
+    "preview": "vite preview",
+    "start": "node server/dist/server.cjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "mock": "concurrently -k -n llm,myrkavell \"npm:mock:llm\" \"npm:mock:myrkavell\"",
+    "mock:llm": "node scripts/mock-llm.mjs",
+    "mock:myrkavell": "node scripts/mock-myrkavell.mjs",
+    "test": "npm run typecheck",
+    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1",
+    "release:win": "npm run build:all && npm run package:win"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "dompurify": "^3.2.4",
+    "expr-eval": "^2.0.2",
+    "highlight.js": "^11.11.1",
+    "idb": "^8.0.2",
+    "lucide-react": "^0.468.0",
+    "marked": "^15.0.6",
+    "marked-highlight": "^2.2.1",
+    "nanoid": "^5.0.9",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.0.5",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

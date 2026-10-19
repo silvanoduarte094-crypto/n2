@@ -1,0 +1,18 @@
+# deps
+node_modules/
+
+# builds
+dist/
+server/dist/
+release/
+
+# runtime portable (local only)
+.tools/
+
+# logs / misc
+*.log
+npm-debug.log*
+.env
+.env.*
+.DS_Store
+Thumbs.db

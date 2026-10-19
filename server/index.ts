@@ -1,0 +1,324 @@
+import http from 'node:http';
+import { existsSync, statSync } from 'node:fs';
+import { createReadStream } from 'node:fs';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import { spawn } from 'node:child_process';
+
+const ROOT = process.env.N2_ROOT ? path.resolve(process.env.N2_ROOT) : process.cwd();
+const DIST = path.join(ROOT, 'dist');
+const PORT = Number(process.env.N2_PORT || 7331);
+const HOST = process.env.N2_HOST || '127.0.0.1';
+const VERSION = '0.1.0';
+const MAX_BODY = 12 * 1024 * 1024;
+
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.map': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
+};
+
+const CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': 'content-type, authorization, x-n2-token',
+  'access-control-max-age': '86400',
+};
+
+function sendJson(res: http.ServerResponse, status: number, data: unknown) {
+  const body = JSON.stringify(data);
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    ...CORS_HEADERS,
+  });
+  res.end(body);
+}
+
+function readJson(req: http.IncomingMessage): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY) {
+        reject(new Error('Corpo da requisição grande demais.'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        resolve(raw ? JSON.parse(raw) : {});
+      } catch {
+        reject(new Error('JSON inválido.'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function validateTarget(raw: string): URL {
+  const url = new URL(raw);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Apenas URLs http(s) são permitidas.');
+  }
+  const blocked = new Set([
+    '169.254.169.254',
+    'metadata.google.internal',
+    'metadata.google.internal.',
+    '100.100.100.200',
+  ]);
+  if (blocked.has(url.hostname)) {
+    throw new Error('Destino bloqueado por segurança.');
+  }
+  return url;
+}
+
+function sanitizeHeaders(input: unknown): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (!input || typeof input !== 'object') return headers;
+  const blocked = new Set([
+    'host',
+    'content-length',
+    'connection',
+    'transfer-encoding',
+    'origin',
+    'referer',
+    'cookie',
+    'sec-fetch-site',
+    'sec-fetch-mode',
+    'sec-fetch-dest',
+    'accept-encoding',
+  ]);
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    const clean = key.toLowerCase().trim();
+    if (blocked.has(clean) || clean.startsWith('sec-')) continue;
+    if (typeof value === 'string') headers[clean] = value;
+  }
+  return headers;
+}
+
+async function handleProxy(req: http.IncomingMessage, res: http.ServerResponse) {
+  const payload = await readJson(req);
+  const target = validateTarget(String(payload.url || ''));
+  const method = String(payload.method || 'POST').toUpperCase();
+  const headers = sanitizeHeaders(payload.headers);
+  const body =
+    method === 'GET' || method === 'HEAD' ? undefined : typeof payload.body === 'string' ? payload.body : '';
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 180_000);
+  try {
+    const upstream = await fetch(target, {
+      method,
+      headers,
+      body,
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+
+    const responseHeaders: Record<string, string> = { ...CORS_HEADERS };
+    const blockedResponse = new Set([
+      'content-encoding',
+      'content-length',
+      'transfer-encoding',
+      'connection',
+      'set-cookie',
+      'access-control-allow-origin',
+      'access-control-allow-credentials',
+      'access-control-allow-headers',
+      'access-control-allow-methods',
+    ]);
+    upstream.headers.forEach((value, key) => {
+      if (blockedResponse.has(key)) return;
+      responseHeaders[key] = value;
+    });
+    res.writeHead(upstream.status, upstream.statusText, responseHeaders);
+
+    if (!upstream.body) {
+      res.end();
+      return;
+    }
+    const stream = Readable.fromWeb(upstream.body as any);
+    stream.on('error', () => res.destroy());
+    stream.pipe(res);
+    res.on('close', () => {
+      clearTimeout(timer);
+      controller.abort();
+    });
+  } catch (error) {
+    clearTimeout(timer);
+    const message =
+      error instanceof Error
+        ? error.name === 'AbortError'
+          ? 'O provedor demorou demais para responder.'
+          : error.message
+        : String(error);
+    if (!res.headersSent) sendJson(res, 502, { error: message });
+    else res.destroy();
+  }
+}
+
+function resolveStatic(pathname: string): string | null {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const relative = decoded.replace(/^\/+/, '');
+  let filePath = path.resolve(DIST, relative);
+  if (filePath !== DIST && !filePath.startsWith(DIST + path.sep)) return null;
+  if (existsSync(filePath) && statSync(filePath).isDirectory()) {
+    filePath = path.join(filePath, 'index.html');
+  }
+  if (!existsSync(filePath)) return null;
+  return filePath;
+}
+
+async function serveStatic(req: http.IncomingMessage, res: http.ServerResponse, pathname: string) {
+  let filePath = resolveStatic(pathname);
+  if (!filePath) {
+    const acceptsHtml = String(req.headers.accept || '').includes('text/html');
+    if (acceptsHtml || pathname === '/') {
+      filePath = path.join(DIST, 'index.html');
+      if (!existsSync(filePath)) {
+        sendJson(res, 503, {
+          error: 'Build não encontrado. Rode `npm run build` antes de iniciar o servidor.',
+        });
+        return;
+      }
+    } else {
+      sendJson(res, 404, { error: 'Arquivo não encontrado.' });
+      return;
+    }
+  }
+  const ext = path.extname(filePath).toLowerCase();
+  const isAsset = filePath.includes(`${path.sep}assets${path.sep}`);
+  const stats = statSync(filePath);
+  res.writeHead(200, {
+    'content-type': MIME[ext] || 'application/octet-stream',
+    'content-length': stats.size,
+    'cache-control': isAsset ? 'public, max-age=31536000, immutable' : 'no-cache',
+    'x-content-type-options': 'nosniff',
+  });
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  createReadStream(filePath).pipe(res);
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url || '/', `http://${req.headers.host || '127.0.0.1'}`);
+  const pathname = url.pathname;
+
+  if (pathname.startsWith('/api/')) {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, CORS_HEADERS);
+      res.end();
+      return;
+    }
+    if (pathname === '/api/health') {
+      sendJson(res, 200, {
+        ok: true,
+        name: 'n2',
+        version: VERSION,
+        node: process.version,
+        root: ROOT,
+        dist: existsSync(DIST),
+      });
+      return;
+    }
+    if (pathname === '/api/proxy') {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'Use POST.' });
+        return;
+      }
+      const requiredToken = (process.env.N2_PROXY_TOKEN || '').trim();
+      if (requiredToken && String(req.headers['x-n2-token'] || '') !== requiredToken) {
+        sendJson(res, 401, { error: 'Token do proxy inválido. Configure o mesmo token no app.' });
+        return;
+      }
+      try {
+        await handleProxy(req, res);
+      } catch (error) {
+        if (!res.headersSent) {
+          sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+        } else {
+          res.destroy();
+        }
+      }
+      return;
+    }
+    sendJson(res, 404, { error: 'Rota de API desconhecida.' });
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    sendJson(res, 405, { error: 'Método não permitido.' });
+    return;
+  }
+
+  try {
+    await serveStatic(req, res, pathname);
+  } catch (error) {
+    if (!res.headersSent) sendJson(res, 500, { error: 'Falha ao servir o arquivo.' });
+    else res.destroy();
+  }
+});
+
+server.listen(PORT, HOST, () => {
+  const address = `http://${HOST}:${PORT}`;
+  const line = '─'.repeat(54);
+  console.log(`\n\x1b[35m${line}\x1b[0m`);
+  console.log(`  \x1b[1mN2\x1b[0m · Núcleo de Inteligência · v${VERSION}`);
+  console.log(`  Bridge local: \x1b[36m${address}\x1b[0m`);
+  console.log(`  Dados: somente neste dispositivo`);
+  console.log(`\x1b[35m${line}\x1b[0m\n`);
+  if (process.env.N2_NO_OPEN !== '1' && !process.argv.includes('--no-open')) {
+    setTimeout(() => openBrowser(address), 350);
+  }
+});
+
+function openBrowser(url: string) {
+  try {
+    if (process.platform === 'win32') {
+      spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+    } else if (process.platform === 'darwin') {
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+    }
+  } catch {
+    console.log(`Abra manualmente: ${url}`);
+  }
+}
+
+function shutdown() {
+  console.log('\nEncerrando N2…');
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 2500);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

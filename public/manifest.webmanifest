@@ -1,0 +1,26 @@
+{
+  "name": "N2 · Núcleo de Inteligência",
+  "short_name": "N2",
+  "description": "Workbench de IA local-first com agentes, memória, voz e conectores.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07070b",
+  "theme_color": "#07070b",
+  "categories": ["productivity", "developer", "utilities"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
