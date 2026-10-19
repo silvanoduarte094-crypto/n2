@@ -24,5 +24,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Transport tests
+        run: npm run test:transport
+
       - name: Build
         run: npm run build:all
