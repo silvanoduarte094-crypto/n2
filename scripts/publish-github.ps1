@@ -40,6 +40,10 @@ function Fail([string]$Message) {
 if (-not (Test-Path $Git)) { $Git = "git" }
 if (-not (Test-Path $GhLocal)) { $GhLocal = "gh" }
 
+# gh chama o git pelo PATH; garante o git portatil quando disponivel.
+$GitCmdDir = Split-Path $Git
+if (Test-Path $GitCmdDir) { $env:Path = "$GitCmdDir;$env:Path" }
+
 Push-Location $Root
 try {
   Write-Step "Verificando autenticacao do GitHub CLI"
@@ -56,27 +60,41 @@ try {
   & $GhLocal repo view $fullName 2>$null | Out-Null
   $exists = ($LASTEXITCODE -eq 0)
 
-  if (-not $exists) {
-    Write-Step "Atualizando links do README/docs para $fullName"
-    $files = @(
-      (Join-Path $Root "README.md"),
-      (Join-Path $Root "docs\RELEASE.md"),
-      (Join-Path $Root "scripts\start-release.bat"),
-      (Join-Path $Root "scripts\RELEASE-README.txt")
-    )
-    foreach ($file in $files) {
-      if (Test-Path $file) {
-        $content = Get-Content $file -Raw
-        $content = $content -replace 'SEU-USUARIO', $owner
-        Set-Content $file $content -NoNewline
-      }
+  Write-Step "Atualizando links do README/docs para $fullName"
+  $files = @(
+    (Join-Path $Root "README.md"),
+    (Join-Path $Root "docs\RELEASE.md"),
+    (Join-Path $Root "scripts\start-release.bat"),
+    (Join-Path $Root "scripts\RELEASE-README.txt")
+  )
+  foreach ($file in $files) {
+    if (Test-Path $file) {
+      $content = Get-Content $file -Raw
+      $content = $content -replace 'SEU-USUARIO', $owner
+      Set-Content $file $content -NoNewline
     }
-    & $Git add -A
+  }
+  & $Git add -A
+  & $Git diff --cached --quiet 2>$null
+  if ($LASTEXITCODE -ne 0) {
     & $Git commit -m "docs: apontar links para $fullName" 2>$null | Out-Null
+  }
 
+  if (-not $exists) {
     Write-Step "Criando repositorio $fullName ($Visibility) e enviando main"
     & $GhLocal repo create $fullName --$Visibility --source . --remote origin --push
-    if ($LASTEXITCODE -ne 0) { Fail "gh repo create falhou." }
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "  gh repo create falhou; tentando criar e enviar manualmente..." -ForegroundColor Yellow
+      & $GhLocal repo create $fullName --$Visibility 2>$null | Out-Null
+      & $Git remote get-url origin 2>$null | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        & $Git remote add origin "https://github.com/$fullName.git"
+      } else {
+        & $Git remote set-url origin "https://github.com/$fullName.git"
+      }
+      & $Git push -u origin main
+      if ($LASTEXITCODE -ne 0) { Fail "git push falhou." }
+    }
   } else {
     Write-Step "Repositorio $fullName ja existe; enviando main"
     & $Git remote get-url origin 2>$null | Out-Null
