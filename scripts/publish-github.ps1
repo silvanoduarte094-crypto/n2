@@ -17,7 +17,7 @@ param(
   [switch]$SkipRelease
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $ScriptDir
@@ -43,19 +43,18 @@ if (-not (Test-Path $GhLocal)) { $GhLocal = "gh" }
 Push-Location $Root
 try {
   Write-Step "Verificando autenticacao do GitHub CLI"
-  & $GhLocal auth status *> $null
+  & $GhLocal auth status 2>$null | Out-Null
   if ($LASTEXITCODE -ne 0) {
     Fail "gh nao esta autenticado. Rode: `"$GhLocal`" auth login"
   }
 
-  $owner = (& $GhLocal api user --jq ".login").Trim()
+  $owner = (& $GhLocal api user --jq ".login" 2>$null | Select-Object -First 1).Trim()
   if (-not $owner) { Fail "Nao consegui obter o usuario do GitHub." }
   Write-Step "Usuario: $owner"
 
   $fullName = "$owner/$RepoName"
-  $exists = $false
-  & $GhLocal repo view $fullName *> $null
-  if ($LASTEXITCODE -eq 0) { $exists = $true }
+  & $GhLocal repo view $fullName 2>$null | Out-Null
+  $exists = ($LASTEXITCODE -eq 0)
 
   if (-not $exists) {
     Write-Step "Atualizando links do README/docs para $fullName"
@@ -73,14 +72,14 @@ try {
       }
     }
     & $Git add -A
-    & $Git commit -m "docs: apontar links para $fullName" *> $null
+    & $Git commit -m "docs: apontar links para $fullName" 2>$null | Out-Null
 
     Write-Step "Criando repositorio $fullName ($Visibility) e enviando main"
     & $GhLocal repo create $fullName --$Visibility --source . --remote origin --push
     if ($LASTEXITCODE -ne 0) { Fail "gh repo create falhou." }
   } else {
     Write-Step "Repositorio $fullName ja existe; enviando main"
-    & $Git remote get-url origin *> $null
+    & $Git remote get-url origin 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
       & $Git remote add origin "https://github.com/$fullName.git"
     } else {
@@ -91,7 +90,7 @@ try {
   }
 
   Write-Step "Ativando GitHub Pages (fonte: GitHub Actions)"
-  & $GhLocal api --method POST "/repos/$fullName/pages" -f build_type=workflow *> $null
+  & $GhLocal api --method POST "/repos/$fullName/pages" -f build_type=workflow 2>$null | Out-Null
   if ($LASTEXITCODE -ne 0) {
     Write-Host "  (Pages pode ja estar ativo ou exigir habilitacao manual em Settings > Pages)" -ForegroundColor Yellow
   }
@@ -102,7 +101,7 @@ try {
       $Tag = "v$($pkg.version)"
     }
     Write-Step "Criando e enviando a tag $Tag (dispara o release portatil)"
-    & $Git tag -f $Tag *> $null
+    & $Git tag -f $Tag 2>$null | Out-Null
     & $Git push -f origin $Tag
     if ($LASTEXITCODE -ne 0) { Fail "git push da tag falhou." }
   }

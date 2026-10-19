@@ -40,7 +40,7 @@ Ollama.
 Baixe o pacote **`n2-windows-x64.zip`** na página de releases:
 
 ```
-https://github.com/SEU-USUARIO/n2/releases/latest
+https://github.com/silvanoduarte094-crypto/n2/releases/latest
 ```
 
 1. Extraia o zip em uma pasta (ex.: `C:\N2`).
@@ -53,7 +53,7 @@ Não precisa instalar nada — nem Node, nem Docker.
 ### Opção 2 — interface web (GitHub Pages)
 
 ```
-https://SEU-USUARIO.github.io/n2/
+https://silvanoduarte094-crypto.github.io/n2/
 ```
 
 A versão web não inclui o bridge local. Para usá-la com um provedor real,
@@ -65,7 +65,7 @@ bridge em outra máquina. Sem proxy, você ainda pode usar Ollama em
 ### Opção 3 — a partir do código
 
 ```bash
-git clone https://github.com/SEU-USUARIO/n2.git
+git clone https://github.com/silvanoduarte094-crypto/n2.git
 cd n2
 npm install
 npm run build:all
@@ -268,7 +268,7 @@ git init
 git add .
 git commit -m "feat: N2 v0.1.0"
 git branch -M main
-git remote add origin https://github.com/SEU-USUARIO/n2.git
+git remote add origin https://github.com/silvanoduarte094-crypto/n2.git
 git push -u origin main
 ```
 

@@ -37,4 +37,4 @@ Problemas comuns
 - Bridge remoto com token: defina N2_PROXY_TOKEN antes de iniciar e informe o
   mesmo token em Configuracoes -> Geral -> Token do proxy.
 
-Licenca MIT. Codigo-fonte: https://github.com/SEU-USUARIO/n2
+Licenca MIT. Codigo-fonte: https://github.com/silvanoduarte094-crypto/n2

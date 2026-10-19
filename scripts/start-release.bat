@@ -5,7 +5,7 @@ title N2 - Nucleo de Inteligencia
 
 if not exist "node.exe" (
   echo [erro] node.exe nao encontrado.
-  echo Baixe o pacote completo em: https://github.com/SEU-USUARIO/n2/releases/latest
+  echo Baixe o pacote completo em: https://github.com/silvanoduarte094-crypto/n2/releases/latest
   pause
   exit /b 1
 )

@@ -14,7 +14,7 @@ git init
 git add .
 git commit -m "feat: N2 v0.1.0"
 git branch -M main
-git remote add origin https://github.com/SEU-USUARIO/n2.git
+git remote add origin https://github.com/silvanoduarte094-crypto/n2.git
 git push -u origin main
 ```
 
@@ -30,7 +30,7 @@ git push -u origin main
    interface em:
 
 ```
-https://SEU-USUARIO.github.io/n2/
+https://silvanoduarte094-crypto.github.io/n2/
 ```
 
 A versão do Pages é só a interface (sem o bridge). Para usar com provedores
@@ -50,7 +50,7 @@ git push origin v0.1.0
 Ao terminar, a release aparece em:
 
 ```
-https://github.com/SEU-USUARIO/n2/releases/latest
+https://github.com/silvanoduarte094-crypto/n2/releases/latest
 ```
 
 Arquivos gerados:
@@ -91,7 +91,7 @@ Mantenha os três iguais e crie a tag com o mesmo número (`v0.1.0`).
 
 - [ ] `npm run typecheck` passando
 - [ ] `npm run build:all` passando
-- [ ] README com o link do repositório correto (troque `SEU-USUARIO`)
+- [ ] README com o link do repositório correto (troque `silvanoduarte094-crypto`)
 - [ ] Pages habilitado como GitHub Actions
 - [ ] Tag enviada e release gerada
 - [ ] `n2-windows-x64.zip` baixado e testado em pasta limpa
