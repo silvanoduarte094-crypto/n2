@@ -9,7 +9,7 @@ const ROOT = process.env.N2_ROOT ? path.resolve(process.env.N2_ROOT) : process.c
 const DIST = path.join(ROOT, 'dist');
 const PORT = Number(process.env.N2_PORT || 7331);
 const HOST = process.env.N2_HOST || '127.0.0.1';
-const VERSION = '0.1.1';
+const VERSION = '0.2.0';
 const MAX_BODY = 12 * 1024 * 1024;
 
 const MIME: Record<string, string> = {
@@ -37,8 +37,9 @@ const MIME: Record<string, string> = {
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
-  'access-control-allow-headers': 'content-type, authorization, x-n2-token',
-  'access-control-expose-headers': 'x-n2-bridge',
+  'access-control-allow-headers':
+    'content-type, authorization, x-n2-token, mcp-session-id, mcp-protocol-version',
+  'access-control-expose-headers': 'x-n2-bridge, mcp-session-id, mcp-protocol-version',
   'access-control-max-age': '86400',
 };
 

@@ -24,8 +24,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Transport tests
-        run: npm run test:transport
+      - name: Tests
+        run: npm run test:transport && npm run test:cron && npm run test:mcp && npm run test:memory
 
       - name: Build
         run: npm run build:all

@@ -28,6 +28,17 @@ Testado com os cabeçalhos CORS reais de cada API (set/2026):
 > **Chaves:** no modo direto, a chave vai do seu navegador direto ao provedor.
 > Ela continua salva apenas no IndexedDB deste dispositivo — nada passa pelo N2.
 
+## MCP e embeddings na web
+
+Servidores **MCP** normalmente são locais e não enviam CORS. Na versão web pura,
+o servidor precisa liberar a origem do Pages e expor `mcp-session-id`; caso
+contrário, use o app completo com bridge. O bridge já repassa os cabeçalhos de
+sessão MCP.
+
+Para **RAG**, o endpoint de embeddings também precisa de CORS. Ollama exige
+`OLLAMA_ORIGINS`; OpenAI-compatíveis normalmente liberam. Sem embeddings, a
+busca lexical continua funcionando.
+
 ## Bridge grátis no Codespaces (recomendado para GitHub Models)
 
 1. Clique em **Configurações → Geral → “Abrir bridge gratuito no Codespaces”**

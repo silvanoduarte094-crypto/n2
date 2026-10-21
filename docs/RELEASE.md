@@ -12,7 +12,7 @@ No computador:
 ```bash
 git init
 git add .
-git commit -m "feat: N2 v0.1.0"
+git commit -m "feat: N2 v0.2.0"
 git branch -M main
 git remote add origin https://github.com/silvanoduarte094-crypto/n2.git
 git push -u origin main
@@ -44,8 +44,8 @@ O workflow `release.yml` empacota o app portátil (Windows x64) com Node incluso
 Crie e envie uma tag:
 
 ```bash
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 Ao terminar, a release aparece em:
@@ -89,7 +89,7 @@ Isso gera `release/n2-windows-x64.zip`. Extraia em uma pasta limpa, rode
 - `public/sw.js` → `CACHE` (force a atualização do PWA)
 - `docs/RELEASE-NOTES.md` → notas da release (usadas pelo workflow)
 
-Mantenha os três primeiros iguais e crie a tag com o mesmo número (`v0.1.1`).
+Mantenha os três primeiros iguais e crie a tag com o mesmo número (`v0.2.0`).
 
 ## 6. Checklist de publicação
 

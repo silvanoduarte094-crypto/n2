@@ -187,6 +187,11 @@ export async function* iterateSSE(
       if (data) yield data;
     }
   } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // The stream may already be closed or locked by the transport.
+    }
     reader.releaseLock();
   }
 }

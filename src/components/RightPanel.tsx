@@ -208,7 +208,7 @@ export function RightPanel() {
         <div className="panel-section">
           <div className="panel-note">
             Ferramentas disponíveis para o agente. Elas só são chamadas quando o modo agente está
-            ativo.
+            ativo. Ferramentas de conectores MCP são descobertas automaticamente a cada execução.
           </div>
           <div className="tool-def-list">
             {TOOL_DEFINITIONS.map((tool) => (

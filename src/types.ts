@@ -16,6 +16,10 @@ export interface Provider {
   notes?: string;
   /** `false` blocks direct browser calls (provider without CORS, e.g. GitHub Models). */
   direct?: boolean;
+  /** USD per 1M input tokens, used only for local cost estimates. */
+  inputPrice?: number;
+  /** USD per 1M output tokens, used only for local cost estimates. */
+  outputPrice?: number;
 }
 
 export interface Attachment {
@@ -79,6 +83,39 @@ export interface Memory {
   createdAt: number;
   updatedAt: number;
   source?: string;
+  /** Local embedding vector, when semantic memory is enabled. */
+  embedding?: number[];
+  embeddingModel?: string;
+  embeddedAt?: number;
+}
+
+export interface UsageRecord {
+  id: string;
+  at: number;
+  providerId: string;
+  providerName: string;
+  model: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  durationMs: number;
+  ok: boolean;
+  sessionId?: string;
+  /** Estimated USD cost, only when the provider has prices configured. */
+  costUsd?: number;
+}
+
+export interface Routine {
+  id: string;
+  name: string;
+  prompt: string;
+  /** Five-field cron expression (minute hour day-of-month month day-of-week). */
+  cron: string;
+  enabled: boolean;
+  /** Show a desktop notification when the run finishes. */
+  notify: boolean;
+  createdAt: number;
+  lastRunAt?: number;
 }
 
 export type ConnectorType = 'webhook' | 'rest' | 'mcp';
@@ -121,6 +158,14 @@ export interface Settings {
   connectors: Connector[];
   onboardingComplete: boolean;
   hasGithubToken?: boolean;
+  /** Ordered providers tried automatically when the active one fails before answering. */
+  fallbackProviderIds: string[];
+  /** Semantic memory (RAG) toggle and embedding endpoint. */
+  ragEnabled: boolean;
+  embeddingsProviderId: string;
+  embeddingsModel: string;
+  /** Scheduled local routines, executed while the app is open. */
+  routines: Routine[];
 }
 
 export interface JSONSchema {
@@ -169,4 +214,5 @@ export interface ExportBundle {
   sessions: Session[];
   memories: Memory[];
   settings: Settings;
+  usage?: UsageRecord[];
 }

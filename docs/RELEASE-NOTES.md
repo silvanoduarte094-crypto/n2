@@ -1,68 +1,110 @@
-# N2 v0.1.1 · Núcleo de Inteligência
+# N2 v0.2.0 · Núcleo de Inteligência
 
-Versão focada na experiência **na web**: conexão direta ou via bridge, com um
-bridge gratuito no GitHub Codespaces para provedores sem CORS (como GitHub
-Models). Continua local-first, sem telemetria.
+Versão de **profundidade**: o N2 passa a falar MCP nativamente, busca memórias
+com embeddings locais, executa rotinas agendadas, mede custo/tokens/latência e
+continua respondendo quando o provedor principal falha. Segue local-first, sem
+telemetria e sob licença MIT.
 
 ## Download
 
 - **`n2-windows-x64.zip`** — app portátil para Windows x64 com Node incluso.
   Extraia, execute `start.bat` e o navegador abre em `http://127.0.0.1:7331`.
 - **`n2-source.zip`** — código-fonte completo.
+- **`n2-windows-x64.zip.sha256`** — checksum do pacote.
 
 ## Novidades
 
-- **Três modos de conexão** em Configurações → Geral: **Automático**, **Bridge** e
-  **Direto** (chamadas do navegador com CORS).
-- **Fallback automático:** se o bridge não responder, o N2 repete a requisição
-  direto do navegador quando o provedor permite.
-- **Detecção de bridge ausente** com o marcador `x-n2-bridge` — mensagens de erro
-  claras em vez de falhas silenciosas.
-- **Bridge gratuito no Codespaces:** botão nas configurações, `.devcontainer`
-  pronto, token gerado automaticamente e porta pública para a versão web.
-- **Toggles por provedor:** “Chamadas diretas do navegador (CORS)” no cartão de
-  cada provedor.
-- **GitHub Models orientado:** aviso explícito no onboarding e nas configurações
-  quando não há CORS disponível.
-- Mocks locais agora enviam cabeçalhos CORS (úteis para testar o modo direto).
+### MCP nativo
 
-## O que funciona direto no navegador
+- Cliente **Streamable HTTP** com handshake `initialize`, sessão
+  `Mcp-Session-Id`, `tools/list` paginado e `tools/call`.
+- Respostas em JSON ou **SSE**.
+- Ferramentas descobertas viram `mcp_<conector>_<ferramenta>` no agente, além de
+  `mcp_list_tools` e `mcp_call`.
+- Botão **Testar MCP** no cadastro do conector.
+- Falha de um servidor MCP não derruba o chat.
 
-| Provedor | Direto (CORS) |
-| --- | --- |
-| OpenAI | ✅ |
-| Anthropic | ✅ (o N2 envia `anthropic-dangerous-direct-browser-access`) |
-| Google Gemini | ✅ |
-| Ollama local | ✅ (configure `OLLAMA_ORIGINS`) |
-| GitHub Models | ❌ — use o bridge local ou o do Codespaces |
+Guia: `docs/MCP.md`.
 
-Guia completo: `docs/WEB.md`.
+### RAG local
 
-## Como usar
+- Embeddings via **Ollama** (`nomic-embed-text`) ou API compatível com OpenAI.
+- Vetores guardados no IndexedDB; reindexação manual na aba **Dados**.
+- Busca **híbrida** (lexical + cosseno) com fallback lexical automático.
+- Memórias sem relação com a pergunta deixam de ser injetadas no prompt.
 
-1. Baixe `n2-windows-x64.zip` e extraia.
-2. Execute `start.bat`.
-3. Configure um provedor no onboarding. Para GitHub Models, crie um token com
-   `models:read` em <https://github.com/settings/tokens>.
-4. Na web (GitHub Pages), use OpenAI/Anthropic/Gemini/Ollama direto ou abra um
-   bridge no Codespaces para GitHub Models.
+### Rotinas agendadas
+
+- Cron local de 5 campos com prévia da próxima execução.
+- Execução manual, pausa, notificações e conversa `Rotina: <nome>`.
+- Uma execução atrasada roda uma vez na próxima abertura, sem repetir o intervalo
+  perdido em lote.
+
+Guia: `docs/AUTOMATION.md`.
+
+### Observabilidade
+
+- Aba **Uso** com requisições, tokens, latência média e custo estimado.
+- Gráfico dos últimos 7 dias e histórico por provedor/modelo.
+- Preços por 1M de tokens configuráveis em cada provedor.
+- Histórico local (máx. 5.000 registros), exportado no backup.
+
+### Fallback entre provedores
+
+- Lista ordenada de provedores de reserva em **Configurações → Agente**.
+- A troca acontece somente se o provedor falhar **antes** de emitir texto ou
+  ferramenta; a sessão e a mensagem passam a mostrar o modelo que respondeu.
+
+### Prompt com variáveis
+
+- `{{user}}`, `{{date}}`, `{{time}}`, `{{timezone}}`, `{{provider}}`,
+  `{{model}}`, `{{tools}}` e `{{memories}}`.
+- Inserção por chips e prévia com o contexto atual.
+
+### Outros
+
+- Banco IndexedDB **v2** com store `usage` e migração automática.
+- Backup agora inclui o histórico de uso.
+- Mock local de LLM ganhou endpoints de embeddings para testar RAG.
+- CI cobre transporte, cron, MCP e memória/RAG.
+- Versão 0.2.0 no app, bridge, service worker e pacote.
+
+## Atualizando da v0.1.1
+
+1. Extraia o novo zip em uma pasta separada (ou substitua os arquivos do app).
+2. Abra normalmente. O banco é migrado de v1 para v2 sem apagar conversas.
+3. Configurações existentes são preservadas; os novos campos começam desligados
+   (RAG e fallback) ou vazios (rotinas).
 
 ## Requisitos
 
 - Windows x64 (o pacote inclui o runtime) — ou qualquer navegador para a versão web.
-- Node 20+ apenas para rodar a partir do código-fonte.
+- Node 24+ apenas para rodar a partir do código-fonte.
+- Para RAG local: Ollama com um modelo de embeddings (ex.:
+  `ollama pull nomic-embed-text`).
+
+## Limitações conhecidas
+
+- MCP **stdio** ainda não é executado pelo bridge; use um adaptador HTTP.
+- Rotinas rodam apenas com o app aberto (não há daemon no bridge).
+- Webhooks de entrada e gatilhos por evento continuam no roadmap.
+- O custo é uma estimativa local baseada nos preços que você informar.
 
 ## Notas
 
-- O N2 é um projeto original sob licença MIT; não redistribui código ou modelos
+- Projeto original sob licença MIT; não redistribui código ou modelos
   proprietários de terceiros.
 - As chaves de API ficam somente no IndexedDB do navegador do usuário.
 - Verifique o SHA256 em `n2-windows-x64.zip.sha256`.
+- Nenhuma telemetria, analytics ou conta.
 
 ## Links
 
-- Documentação: `docs/`
-- Web (modos de conexão): `docs/WEB.md`
+- Site/app web: <https://silvanoduarte094-crypto.github.io/n2/>
+- Repositório: <https://github.com/silvanoduarte094-crypto/n2>
+- MCP: `docs/MCP.md`
+- Rotinas: `docs/AUTOMATION.md`
+- Web e CORS: `docs/WEB.md`
 - Arquitetura: `docs/ARCHITECTURE.md`
 - Segurança: `SECURITY.md`
 - Roadmap: `docs/ROADMAP.md`

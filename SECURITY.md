@@ -18,13 +18,27 @@ provedores de IA escolhidos por ele. Os riscos considerados são:
   IndexedDB e só vai ao provedor via bridge.
 - **Sem telemetria.** Nenhum evento, métrica ou identificador é enviado.
 - **Bridge em `127.0.0.1`.** Por padrão, só a própria máquina acessa.
-- **Ferramentas explícitas.** O agente só usa as ferramentas declaradas e no
-  máximo 8 etapas por mensagem.
+- **Ferramentas explícitas.** O agente só usa as ferramentas declaradas e os
+  conectores MCP ativos, no máximo 8 etapas por mensagem.
 - **Conteúdo é dado, não comando.** Respostas do modelo e resultados de
   ferramentas são renderizados como Markdown sanitizado (DOMPurify), nunca como
   HTML executável.
 - **Links externos** recebem `rel="noopener noreferrer"` e abrem em nova aba.
 - **Backup manual.** Exportar/importar é uma ação explícita do usuário.
+
+## MCP, rotinas e embeddings
+
+- **Servidores MCP são confiáveis por definição.** Ao cadastrar um servidor, você
+  permite que o agente liste e chame as ferramentas que ele expõe. Adicione apenas
+  servidores que você controla ou confia, e revise as permissões do token usado.
+- **Rotinas herdam o acesso do agente.** Uma rotina pode chamar conectores e
+  ferramentas sem confirmação interativa; revise a instrução e o agendamento
+  antes de ativá-la.
+- **Embeddings enviam o texto da memória** para o endpoint configurado (Ollama
+  local ou API compatível com OpenAI). Com Ollama em `127.0.0.1`, o texto não sai
+  da máquina.
+- **Uso fica local.** Tokens, latência e custo são gravados apenas no IndexedDB e
+  entram no backup se você exportar.
 
 ## Recomendações ao usuário
 

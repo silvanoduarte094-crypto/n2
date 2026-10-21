@@ -24,6 +24,7 @@ Ollama.
 - [Provedores de IA](#provedores-de-ia)
 - [GitHub Models (gratuito)](#github-models-gratuito)
 - [MYRKAVELL e conectores](#myrkavell-e-conectores)
+- [MCP, rotinas e RAG](#mcp-rotinas-e-rag)
 - [Recursos](#recursos)
 - [Privacidade e segurança](#privacidade-e-segurança)
 - [Desenvolvimento](#desenvolvimento)
@@ -160,6 +161,23 @@ O contrato sugerido (endpoints, payloads, erros e escopos) está em
 
 ---
 
+## MCP, rotinas e RAG
+
+- **MCP nativo:** conecte servidores MCP via Streamable HTTP; as ferramentas
+  entram no agente como `mcp_<conector>_<ferramenta>`. Guia:
+  [docs/MCP.md](docs/MCP.md).
+- **Rotinas agendadas:** instruções recorrentes com cron local, notificações e
+  execução no provedor ativo. Guia: [docs/AUTOMATION.md](docs/AUTOMATION.md).
+- **RAG local:** memórias indexadas com embeddings do Ollama ou de uma API
+  compatível com OpenAI, com busca híbrida e fallback lexical. Os vetores ficam
+  no IndexedDB.
+- **Observabilidade:** tokens, latência, requisições e custo estimado por
+  provedor em **Configurações → Uso**.
+- **Fallback:** se o provedor ativo falhar antes de responder, o N2 tenta os
+  provedores de reserva na ordem configurada.
+
+---
+
 ## Recursos
 
 **Chat e interface**
@@ -176,19 +194,32 @@ O contrato sugerido (endpoints, payloads, erros e escopos) está em
 - Ferramentas: calculadora, data/hora, busca na web, leitura de URL, GitHub
   (busca e leitura de arquivos), memória e conectores
 - Cartões de ferramenta com argumentos, resultado e duração
-- Modo agente ligável/desligável e prompt de sistema editável
+- Modo agente ligável/desligável, prompt de sistema editável e variáveis
+  (`{{user}}`, `{{date}}`, `{{tools}}`, `{{memories}}`...) com prévia
+- Ferramentas MCP descobertas automaticamente e fallback entre provedores
 
 **Memória**
 
 - Memórias persistentes com tags, fixar, editar e excluir
-- Busca lexical e injeção das memórias relevantes no contexto
-- Exportar/importar backup completo (conversas, memórias, conectores,
+- Busca lexical + semântica (RAG) com embeddings locais e fallback lexical
+- Exportar/importar backup completo (conversas, memórias, uso, conectores,
   configurações)
+
+**Automação**
+
+- Rotinas com cron local, notificações e histórico de última execução
+- Conectores REST, webhook e MCP, incluindo MYRKAVELL
+
+**Observabilidade**
+
+- Tokens, requisições, latência e custo estimado por provedor
+- Preços por 1M de tokens configuráveis; histórico local sem telemetria
 
 **Provedores**
 
 - GitHub Models, OpenAI-compatível, Anthropic, Gemini e Ollama
 - Streaming SSE unificado, teste de conexão, troca de modelo no chat
+- Cadeia de fallback ordenada e modos Auto/Bridge/Direto
 
 **Bridge local**
 
@@ -241,7 +272,11 @@ Comandos úteis:
 | `npm run dev:server` | Bridge em `:7331` (watch) |
 | `npm run build:server` | Gera `server/dist/server.cjs` |
 | `npm run package:win` | Gera `release/n2-windows-x64.zip` |
-| `npm run mock:llm` | Mock de LLM em `:11434` |
+| `npm run test:transport` | Modos bridge/direto/auto |
+| `npm run test:cron` | Parser e próxima execução das rotinas |
+| `npm run test:mcp` | Handshake, paginação, JSON, SSE e erros MCP |
+| `npm run test:memory` | Embeddings, RAG e fallback lexical |
+| `npm run mock:llm` | Mock de LLM e embeddings em `:11434` |
 | `npm run mock:myrkavell` | Mock do MYRKAVELL em `:8788` |
 
 ---
@@ -278,7 +313,7 @@ link de download) está em [docs/RELEASE.md](docs/RELEASE.md). Resumo:
 ```bash
 git init
 git add .
-git commit -m "feat: N2 v0.1.0"
+git commit -m "feat: N2 v0.2.0"
 git branch -M main
 git remote add origin https://github.com/silvanoduarte094-crypto/n2.git
 git push -u origin main
@@ -287,8 +322,8 @@ git push -u origin main
 Depois crie uma tag para disparar o release:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 Em poucos minutos o GitHub Actions publica:
@@ -307,10 +342,13 @@ Em poucos minutos o GitHub Actions publica:
 - [x] Memória com busca e backup
 - [x] Voz, PWA, temas e atalhos
 - [x] Conectores REST/webhook/MCP (registro)
-- [ ] Cliente MCP nativo
-- [ ] RAG com embeddings locais
-- [ ] Rotinas agendadas e webhooks de entrada
-- [ ] Multiagentes e workspace de arquivos
+- [x] Cliente MCP nativo (Streamable HTTP + SSE)
+- [x] RAG com embeddings locais e busca híbrida
+- [x] Rotinas agendadas com cron local
+- [x] Observabilidade de tokens, latência e custo
+- [x] Fallback entre provedores
+- [ ] Webhooks de entrada, multiagentes e workspace de arquivos
+- [ ] MCP stdio e execução de rotinas com o app fechado
 - [ ] SDK de plugins e marketplace
 - [ ] Apps móveis e sincronização opcional
 

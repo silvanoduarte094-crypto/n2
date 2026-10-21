@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import type { Provider } from '../types';
-import { CODESPACES_URL } from '../config';
+import { APP_VERSION, CODESPACES_URL } from '../config';
 import { resolveConnection } from '../lib/providers/http';
 import { cn } from '../lib/utils';
 import { Logo } from './Logo';
@@ -275,7 +275,7 @@ export function Onboarding() {
         )}
       </div>
       <p className="onboarding-foot">
-        N2 v0.1 · código aberto · MIT · seus dados ficam com você
+        N2 v{APP_VERSION} · código aberto · MIT · seus dados ficam com você
       </p>
     </div>
   );

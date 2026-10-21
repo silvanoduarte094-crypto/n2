@@ -10,7 +10,7 @@ O N2 é um app **local-first** dividido em três camadas:
 ┌─────────────────────────────────────────────────────────────┐
 │  Navegador (frontend React + Vite + TypeScript)             │
 │                                                             │
-│  UI ── Zustand ── IndexedDB (sessões, memórias, settings)   │
+│  UI ── Zustand ── IndexedDB (sessões, memórias, uso, settings) │
 │         │                                                   │
 │         └── agent loop ── tools ── providers (fetch/SSE)    │
 └───────────────────────────┬─────────────────────────────────┘
@@ -46,12 +46,13 @@ Princípios:
 O Zustand (`src/store/useStore.ts`) concentra:
 
 - `sessions`: lista de conversas com mensagens, modelo, provedor e metadados.
-- `memories`: memórias persistidas com tags e flag de fixada.
-- `settings`: provedores, prompt, temperatura, conectores e preferências.
+- `memories`: memórias persistidas com tags, flag de fixada e embedding opcional.
+- `settings`: provedores, prompt, temperatura, conectores, fallback, RAG e rotinas.
+- `usage`: medições locais de requisições, tokens, latência e custo estimado.
 - Sessão ativa, painéis abertos, streaming, status, toasts e erros.
 
 Cada mutação relevante persiste no IndexedDB (`src/lib/db.ts`) de forma
-assíncrona. `loadAll()` hidrata a aplicação no boot.
+assíncrona. `init()` hidrata a aplicação no boot e abre o banco na versão 2.
 
 ### Fluxo de uma mensagem
 
@@ -59,12 +60,15 @@ assíncrona. `loadAll()` hidrata a aplicação no boot.
 sendMessage(texto)
   → cria mensagem do usuário
   → runCompletion()
-      → monta prompt de sistema (config + memórias relevantes)
-      → agent loop (até 8 etapas)
-          → provider.streamComplete()  (SSE)
-          → delta de texto → patchAssistant() → UI
-          → tool_calls? executa tools.ts e volta ao passo anterior
-      → salva sessão no IndexedDB
+      → runAgent()
+          → descobre ferramentas MCP (timeout de 8s)
+          → monta prompt (config + variáveis + memórias híbridas)
+          → agent loop (até 8 etapas)
+              → streamChat() no provedor ativo (SSE)
+              → falha antes de emitir texto? tenta fallback
+              → delta de texto → patchAssistant() → UI
+              → tool_calls? executa tools/MCP e volta ao passo anterior
+      → salva sessão e registro de uso no IndexedDB
   → fim: status idle
 ```
 
@@ -73,7 +77,7 @@ sendMessage(texto)
 Os provedores expõem um único contrato:
 
 ```ts
-streamComplete({ provider, messages, tools, temperature, maxTokens, signal })
+streamChat(provider, messages, { settings, temperature, maxTokens, tools, signal })
   → AsyncGenerator<StreamEvent>
 ```
 
@@ -101,11 +105,61 @@ Ferramentas atuais:
 | `web_fetch` | Baixa uma URL e extrai texto | Limite de tamanho |
 | `github_search` | Busca repositórios/código | API pública do GitHub |
 | `github_read` | Lê arquivos de repositórios | API pública |
-| `memory_search` / `memory_save` | Consulta e grava memórias | IndexedDB |
+| `memory_search` / `memory_save` | Consulta e grava memórias | Busca híbrida + IndexedDB |
 | `connector_call` | Chama conectores REST/webhook | Token do conector |
+| `mcp_list_tools` / `mcp_call` | Lista/chama ferramentas MCP | JSON-RPC via bridge |
+| `mcp_<conector>_<tool>` | Ferramentas MCP descobertas | Dinâmicas por execução |
 
 Segurança: URLs passam por validação no bridge; endpoints de metadata de nuvem
 (`169.254.169.254`, `metadata.google.internal`, etc.) são bloqueados.
+
+### MCP
+
+`src/lib/mcp.ts` implementa o cliente **Streamable HTTP**:
+
+- handshake `initialize`, `notifications/initialized` e sessão `Mcp-Session-Id`;
+- `tools/list` paginado e `tools/call`;
+- respostas JSON ou SSE;
+- descoberta por conector com cache de 5 minutos e timeout de 8s no início da
+  execução;
+- nomes nativos `mcp_<conector>_<ferramenta>`, além das ferramentas genéricas.
+
+Falhas de um servidor MCP não bloqueiam o chat: o erro é resumido no prompt e o
+agente segue com as demais ferramentas. Detalhes em [MCP.md](MCP.md).
+
+### RAG local
+
+`src/lib/embeddings.ts` chama `POST /api/embeddings` (Ollama) ou
+`POST /embeddings` (OpenAI-compatível) e normaliza o vetor. As memórias guardam
+`embedding`, `embeddingModel` e `embeddedAt`.
+
+`src/lib/memory.ts` combina:
+
+- ranking lexical (tokens, TF e recência) sempre disponível;
+- similaridade de cosseno quando a memória tem vetor do modelo atual;
+- fallback silencioso para lexical se o provedor de embeddings falhar.
+
+A reindexação é manual (aba Dados) ou acontece ao salvar uma memória nova com o
+RAG ativo. Nenhum texto sai do dispositivo além da chamada ao endpoint de
+embeddings escolhido.
+
+### Rotinas
+
+`src/lib/cron.ts` interpreta cron de 5 campos, calcula a próxima execução e
+descreve o agendamento. O agendador fica em `App.tsx` e verifica a cada 30s;
+`runRoutine` cria uma sessão `Rotina: <nome>` e usa o mesmo pipeline do chat.
+Detalhes em [AUTOMATION.md](AUTOMATION.md).
+
+### Fallback e observabilidade
+
+`runAgent` monta a lista `[provedor ativo, ...fallbackProviderIds]` e só troca de
+provedor se a falha acontecer **antes** de qualquer texto/ferramenta. Ao trocar,
+atualiza a sessão e a mensagem para o modelo que respondeu.
+
+Ao final de cada execução, `runCompletion` grava um `UsageRecord` (provedor,
+modelo, tokens, latência, sucesso e custo estimado). O custo usa os preços por
+1M de tokens configurados no cartão do provedor; sem preços, o painel mostra
+apenas tokens e latência.
 
 ### Interface
 
@@ -116,8 +170,9 @@ Componentes principais:
 - `TopBar.tsx` — título, provedor, modelo, ações rápidas.
 - `ChatView.tsx` / `MessageBubble.tsx` — mensagens, tool cards, ações.
 - `Composer.tsx` — texto, anexos, voz (ditado) e envio.
-- `SettingsModal.tsx` — abas Geral, Provedores, Agente, Conectores, Dados, Sobre.
-- `MemoryPanel.tsx`, `RightPanel.tsx`, `CommandPalette.tsx`, `ToastHost.tsx`.
+- `SettingsModal.tsx` — abas Geral, Provedores, Agente, Rotinas, Uso, Conectores,
+  Dados e Sobre.
+- `RightPanel.tsx`, `CommandPalette.tsx`, `Toast.tsx`.
 
 ## Bridge local
 
@@ -173,12 +228,13 @@ Para subir um bridge pronto no Codespaces (sem instalar nada), use o botão em
 Banco `n2-db` (IndexedDB) com stores:
 
 - `kv` — configurações e metadados.
-- `sessions` — conversas.
-- `memories` — memórias.
-- `connectors`, `attachments` — quando aplicável.
+- `sessions` — conversas (com anexos e tool calls).
+- `memories` — memórias e vetores opcionais.
+- `usage` — histórico de requisições, tokens, latência e custo (limite de 5.000
+  registros).
 
-Backup: **Configurações → Dados → Exportar** gera um JSON com tudo. Importar
-substitui os dados atuais após confirmação.
+Backup: **Configurações → Dados → Exportar** gera um JSON com conversas, memórias,
+configurações e uso. Importar substitui os dados atuais após confirmação.
 
 ## PWA
 
@@ -194,7 +250,8 @@ Pontos pensados para crescer:
   `src/lib/providers/index.ts`.
 - **Nova ferramenta:** adicione o schema e o executor em `src/lib/tools.ts`.
 - **Novo conector:** use a aba Conectores; nada de código.
-- **MCP:** o tipo já existe no modelo de dados; o cliente nativo está no roadmap.
+- **MCP:** cadastre um servidor Streamable HTTP na aba Conectores. Suporte a
+  stdio está no roadmap.
 
 ## Decisões de engenharia
 

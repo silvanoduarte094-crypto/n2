@@ -1,7 +1,8 @@
 # Roadmap do N2
 
-Estado atual: **v0.1.1 — MVP completo + conexão web direta/bridge**. Abaixo, o que já existe e o
-que vem depois, na ordem de prioridade.
+Estado atual: **v0.2.0 — Fase 2 iniciada com MCP nativo, RAG local, rotinas,
+observabilidade e fallback**. Abaixo, o que já existe e o que vem depois, na
+ordem de prioridade.
 
 ## Fase 1 — MVP (concluída)
 
@@ -24,45 +25,54 @@ que vem depois, na ordem de prioridade.
 - [x] Modos de conexão Auto/Bridge/Direto + bridge gratuito via Codespaces
 - [x] Empacotamento portátil para Windows e workflows de CI/Release
 
-## Fase 2 — Profundidade (próximos passos)
+## Fase 2 — Profundidade (em andamento)
 
-### Agente e conhecimento
+### Entregue na v0.2.0
 
-- [ ] Cliente MCP nativo (HTTP/SSE e stdio via bridge)
-- [ ] RAG com embeddings locais (Transformers.js ou Ollama embeddings)
+- [x] Cliente MCP nativo via Streamable HTTP (respostas JSON e SSE)
+- [x] RAG com embeddings locais (Ollama ou API compatível com OpenAI), busca
+      híbrida e fallback lexical
+- [x] Rotinas agendadas com cron local, notificações e execução manual
+- [x] Editor de prompt de sistema com variáveis e pré-visualização
+- [x] Observabilidade local: requisições, tokens, latência e custo estimado
+- [x] Orquestração de provedores com fallback ordenado
+
+### Próximos passos
+
+#### Agente e conhecimento
+
+- [ ] Suporte a MCP **stdio** via bridge (com allowlist de comandos)
 - [ ] Indexação de arquivos e pastas locais pelo bridge
 - [ ] Ferramenta de execução de código em sandbox
 - [ ] Multiagentes: planejador, pesquisador e revisor
 - [ ] Modo "auto" com orçamento de etapas e custo por mensagem
 
-### Automação
+#### Automação
 
-- [ ] Rotinas agendadas (cron local) com notificações
 - [ ] Webhooks de entrada no bridge
 - [ ] Gatilhos por evento (novo arquivo, nova memória, resposta do conector)
+- [ ] Execução de rotinas com o app fechado (serviço no bridge)
 - [ ] Integrações prontas: GitHub, Notion, Google Drive, Discord, Telegram, Slack
 - [ ] Envio de e-mail via SMTP configurado pelo usuário
 
-### Produto
+#### Produto
 
-- [ ] Editor de prompt de sistema com variáveis e pré-visualização
 - [ ] Pasta de trabalho com árvore de arquivos e diff
 - [ ] Imagens: geração e edição via provedores compatíveis
 - [ ] Voz em tempo real (ida e volta sem clique)
 - [ ] Sincronização opcional criptografada entre dispositivos
 - [ ] Apps desktop (Tauri) e mobile (Capacitor)
 
-### Plataforma
+#### Plataforma
 
 - [ ] SDK de plugins (manifest + permissões)
 - [ ] Marketplace de ferramentas e temas
 - [ ] Workspaces de time com permissões
-- [ ] Observabilidade local: custo, tokens e latência por provedor
 - [ ] Auto-update do pacote portátil
 
 ## Fase 3 — Escala
 
-- [ ] Orquestração de múltiplos provedores com fallback
+- [x] Orquestração de múltiplos provedores com fallback
 - [ ] Fine-tuning assistido e datasets locais
 - [ ] Modo offline com modelos pequenos via WebGPU
 - [ ] API pública do N2 para outros apps
