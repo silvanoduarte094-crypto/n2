@@ -1,5 +1,5 @@
 /* N2 offline app shell. API traffic is never cached. */
-const CACHE = 'n2-shell-v0.1.1';
+const CACHE = 'n2-shell-v0.2.0';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (event) => {

@@ -2,9 +2,9 @@ import type { Provider, Settings } from './types';
 
 export const APP_NAME = 'N2';
 export const APP_TAGLINE = 'Núcleo de Inteligência';
-export const APP_VERSION = '0.1.1';
+export const APP_VERSION = '0.2.0';
 export const DB_NAME = 'n2-db';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const REPO_URL = 'https://github.com/silvanoduarte094-crypto/n2';
 export const RELEASES_URL = `${REPO_URL}/releases/latest`;
@@ -118,6 +118,11 @@ export const DEFAULT_SETTINGS: Settings = {
   connectionMode: 'auto',
   connectors: [],
   onboardingComplete: false,
+  fallbackProviderIds: [],
+  ragEnabled: false,
+  embeddingsProviderId: 'ollama',
+  embeddingsModel: 'nomic-embed-text',
+  routines: [],
 };
 
 export const ACCENTS: Record<string, { label: string; hsl: string }> = {

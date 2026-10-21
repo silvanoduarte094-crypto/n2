@@ -1,7 +1,8 @@
 import { Parser } from 'expr-eval';
 import type { Connector, Memory, Settings, ToolDefinition } from '../types';
 import { proxyFetch, responseError } from './providers/http';
-import { searchMemories } from './memory';
+import { searchMemoriesHybrid } from './memory';
+import { callMcpTool, findMcpConnector, listMcpTools, type RuntimeMcpTool } from './mcp';
 import { truncate } from './utils';
 
 export interface ToolContext {
@@ -9,6 +10,8 @@ export interface ToolContext {
   memories: Memory[];
   addMemory: (text: string, tags?: string[], source?: string) => Promise<Memory>;
   signal?: AbortSignal;
+  /** MCP tools discovered at the start of the run, exposed as native tools. */
+  runtimeTools?: RuntimeMcpTool[];
 }
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
@@ -106,6 +109,32 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         limit: { type: 'number', description: '1-10 results', default: 6 },
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'mcp_list_tools',
+    description:
+      'List the tools exposed by an MCP connector. Use before calling an MCP tool you have not seen in the current tool list.',
+    parameters: {
+      type: 'object',
+      properties: {
+        connector: { type: 'string', description: 'MCP connector name or id' },
+      },
+      required: ['connector'],
+    },
+  },
+  {
+    name: 'mcp_call',
+    description:
+      'Call a tool exposed by an MCP connector by name. Prefer the native mcp_* tools when they are available.',
+    parameters: {
+      type: 'object',
+      properties: {
+        connector: { type: 'string', description: 'MCP connector name or id' },
+        tool: { type: 'string', description: 'Exact MCP tool name' },
+        arguments: { type: 'string', description: 'JSON object with the tool arguments' },
+      },
+      required: ['connector', 'tool'],
     },
   },
   {
@@ -366,15 +395,62 @@ export async function executeTool(
       case 'memory_search': {
         const query = String(args.query || '').trim();
         const limit = clampInt(args.limit, 1, 10, 6);
-        const matches = searchMemories(context.memories, query, limit);
+        const matches = await searchMemoriesHybrid(
+          context.memories,
+          query,
+          limit,
+          context.settings,
+          context.signal,
+        );
         return JSON.stringify({
           query,
+          semantic: context.settings.ragEnabled,
           results: matches.map((memory) => ({
             text: memory.text,
             tags: memory.tags,
             updatedAt: new Date(memory.updatedAt).toISOString(),
           })),
         });
+      }
+      case 'mcp_list_tools': {
+        const reference = String(args.connector || '').trim();
+        const connector = findMcpConnector(context.settings, reference);
+        if (!connector) return toolError(`Conector MCP "${reference}" não encontrado.`);
+        if (!connector.enabled) return toolError(`Conector MCP "${connector.name}" está desativado.`);
+        const tools = await listMcpTools(context.settings, connector, context.signal, false);
+        return JSON.stringify({
+          connector: connector.name,
+          tools: tools.map((tool) => ({
+            name: tool.name,
+            description: truncate(tool.description || '', 240),
+            required: Array.isArray((tool.inputSchema as any)?.required)
+              ? (tool.inputSchema as any).required
+              : [],
+          })),
+        });
+      }
+      case 'mcp_call': {
+        const reference = String(args.connector || '').trim();
+        const tool = String(args.tool || '').trim();
+        const connector = findMcpConnector(context.settings, reference);
+        if (!connector) return toolError(`Conector MCP "${reference}" não encontrado.`);
+        if (!connector.enabled) return toolError(`Conector MCP "${connector.name}" está desativado.`);
+        if (!tool) return toolError('Informe o nome da ferramenta MCP.');
+        let callArgs: Record<string, unknown> = {};
+        if (typeof args.arguments === 'string' && args.arguments.trim()) {
+          try {
+            const parsed = JSON.parse(args.arguments);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              return toolError('"arguments" deve ser um objeto JSON.');
+            }
+            callArgs = parsed as Record<string, unknown>;
+          } catch {
+            return toolError('"arguments" não é um JSON válido.');
+          }
+        } else if (args.arguments && typeof args.arguments === 'object') {
+          callArgs = args.arguments as Record<string, unknown>;
+        }
+        return await callMcpTool(context.settings, connector, tool, callArgs, context.signal);
       }
       case 'list_connectors': {
         return JSON.stringify({
@@ -414,8 +490,16 @@ export async function executeTool(
         if (!response.ok) return toolError(`Connector HTTP ${response.status}: ${truncate(text, 1200)}`);
         return JSON.stringify({ connector: connector.name, status: response.status, body: truncate(text, 12000) });
       }
-      default:
-        return toolError(`Ferramenta desconhecida: ${name}`);
+      default: {
+        const runtime = context.runtimeTools?.find((tool) => tool.definition.name === name);
+        if (!runtime) return toolError(`Ferramenta desconhecida: ${name}`);
+        const connector = context.settings.connectors.find(
+          (item) => item.id === runtime.connectorId,
+        );
+        if (!connector) return toolError(`Conector MCP da ferramenta ${name} não existe mais.`);
+        if (!connector.enabled) return toolError(`Conector MCP "${connector.name}" está desativado.`);
+        return await callMcpTool(context.settings, connector, runtime.toolName, args, context.signal);
+      }
     }
   } catch (error) {
     return toolError(error instanceof Error ? error.message : String(error));

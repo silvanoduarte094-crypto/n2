@@ -1,7 +1,7 @@
 {
   "name": "n2",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "N2 — local-first AI workbench with agents, memory, voice and connectors.",
   "type": "module",
   "scripts": {
@@ -18,8 +18,11 @@
     "mock": "concurrently -k -n llm,myrkavell \"npm:mock:llm\" \"npm:mock:myrkavell\"",
     "mock:llm": "node scripts/mock-llm.mjs",
     "mock:myrkavell": "node scripts/mock-myrkavell.mjs",
-    "test": "npm run typecheck && npm run test:transport",
+    "test": "npm run typecheck && npm run test:transport && npm run test:cron && npm run test:mcp && npm run test:memory",
     "test:transport": "node scripts/test-transport.mjs",
+    "test:cron": "tsx scripts/test-cron.ts",
+    "test:mcp": "tsx scripts/test-mcp.ts",
+    "test:memory": "tsx scripts/test-memory.ts",
     "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1",
     "release:win": "npm run build:all && npm run package:win"
   },

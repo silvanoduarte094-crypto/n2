@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from './store/useStore';
 import { ACCENTS } from './config';
+import { isRoutineDue } from './lib/cron';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { ChatView } from './components/ChatView';
@@ -21,10 +22,34 @@ export default function App() {
   const setSettingsOpen = useStore((state) => state.setSettingsOpen);
   const setCommandOpen = useStore((state) => state.setCommandOpen);
   const setSidebarOpen = useStore((state) => state.setSidebarOpen);
+  const routineAttempts = useRef(new Map<string, number>());
 
   useEffect(() => {
     void init();
   }, [init]);
+
+  useEffect(() => {
+    if (!settings.onboardingComplete) return;
+    const tick = () => {
+      const state = useStore.getState();
+      if (state.streaming) return;
+      const now = Date.now();
+      const routine = state.settings.routines.find((item) => {
+        if (!isRoutineDue(item, now)) return false;
+        const lastAttempt = routineAttempts.current.get(item.id) || 0;
+        return now - lastAttempt > 5 * 60_000;
+      });
+      if (!routine) return;
+      routineAttempts.current.set(routine.id, now);
+      void state.runRoutine(routine.id);
+    };
+    const interval = window.setInterval(tick, 30_000);
+    const initial = window.setTimeout(tick, 8_000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(initial);
+    };
+  }, [settings.onboardingComplete]);
 
   useEffect(() => {
     const root = document.documentElement;

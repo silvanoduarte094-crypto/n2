@@ -18,6 +18,16 @@ Primeiro acesso
 - Ollama (local): instale o Ollama, rode "ollama serve" e baixe um modelo.
 - As chaves ficam apenas no seu navegador (IndexedDB).
 
+Novidades da v0.2.0
+-------------------
+- MCP nativo: cadastre servidores Streamable HTTP em Configuracoes -> Conectores.
+- RAG local: ative em Configuracoes -> Agente e use Ollama (nomic-embed-text)
+  ou uma API de embeddings compativel com OpenAI.
+- Rotinas: agende instrucoes com cron em Configuracoes -> Rotinas. Elas rodam
+  enquanto o app estiver aberto.
+- Uso: veja tokens, latencia e custo estimado em Configuracoes -> Uso.
+- Fallback: escolha provedores de reserva em Configuracoes -> Agente.
+
 Dados e privacidade
 -------------------
 - Conversas, memorias e configuracoes ficam no IndexedDB deste navegador.

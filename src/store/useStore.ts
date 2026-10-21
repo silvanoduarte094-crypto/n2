@@ -6,14 +6,17 @@ import type {
   Memory,
   Message,
   Provider,
+  Routine,
   Session,
   Settings,
   ToolCall,
   Usage,
+  UsageRecord,
 } from '../types';
 import { DEFAULT_SETTINGS, getProvider } from '../config';
 import {
   clearAllData,
+  clearUsage,
   deleteMemoryRecord,
   deleteSessionRecord,
   exportBundle,
@@ -21,20 +24,35 @@ import {
   loadMemories,
   loadSessions,
   loadSettings,
+  loadUsage,
   saveMemoryRecord,
   saveSession,
   saveSettings,
+  saveUsageRecord,
 } from '../lib/db';
 import { runAgent } from '../lib/agent';
+import { embedMemory, reindexMemories } from '../lib/memory';
 import { now, titleFromText, truncate, uid } from '../lib/utils';
 
 export type Toast = { id: string; message: string; type: 'success' | 'error' | 'info' };
-export type SettingsTab = 'general' | 'providers' | 'agent' | 'connectors' | 'data' | 'about';
+export type SettingsTab =
+  | 'general'
+  | 'providers'
+  | 'agent'
+  | 'routines'
+  | 'usage'
+  | 'connectors'
+  | 'data'
+  | 'about';
+
+const runningRoutines = new Set<string>();
 
 interface StoreState {
   hydrated: boolean;
   sessions: Session[];
   memories: Memory[];
+  usage: UsageRecord[];
+  reindexProgress: { done: number; total: number } | null;
   settings: Settings;
   activeSessionId: string | null;
   streaming: boolean;
@@ -63,6 +81,11 @@ interface StoreState {
   setActiveProvider: (id: string) => void;
   addMemory: (text: string, tags?: string[], source?: string) => Promise<Memory>;
   removeMemory: (id: string) => Promise<void>;
+  reindexEmbeddings: () => Promise<void>;
+  saveRoutine: (routine: Routine) => void;
+  removeRoutine: (id: string) => void;
+  runRoutine: (id: string) => Promise<void>;
+  clearUsage: () => Promise<void>;
   upsertConnector: (connector: Connector) => void;
   removeConnector: (id: string) => void;
   exportData: () => Promise<void>;
@@ -83,6 +106,8 @@ export const useStore = create<StoreState>((set, get) => ({
   hydrated: false,
   sessions: [],
   memories: [],
+  usage: [],
+  reindexProgress: null,
   settings: structuredClone(DEFAULT_SETTINGS),
   activeSessionId: null,
   streaming: false,
@@ -96,13 +121,14 @@ export const useStore = create<StoreState>((set, get) => ({
   toast: null,
 
   init: async () => {
-    const [sessions, memories, settings] = await Promise.all([
+    const [sessions, memories, settings, usage] = await Promise.all([
       loadSessions(),
       loadMemories(),
       loadSettings(),
+      loadUsage(),
     ]);
     const activeSessionId = sessions[0]?.id || null;
-    set({ sessions, memories, settings, activeSessionId, hydrated: true });
+    set({ sessions, memories, settings, usage, activeSessionId, hydrated: true });
   },
 
   newSession: () => {
@@ -187,7 +213,10 @@ export const useStore = create<StoreState>((set, get) => ({
     const messages = [...session.messages, userMessage];
     const updatedSession: Session = {
       ...session,
-      title: isFirst && settings.autoTitle ? titleFromText(clean || attachments[0]?.name || 'Novo chat') : session.title,
+      title:
+        isFirst && settings.autoTitle && !session.title.startsWith('Rotina:')
+          ? titleFromText(clean || attachments[0]?.name || 'Novo chat')
+          : session.title,
       messages,
       updatedAt: now(),
       providerId: provider.id,
@@ -222,6 +251,9 @@ export const useStore = create<StoreState>((set, get) => ({
     };
     const withAssistant = [...messages, assistantMessage];
     const controller = new AbortController();
+    const startedAt = performance.now();
+    let usedProvider = provider;
+    let failed = false;
 
     set((current) => ({
       streaming: true,
@@ -289,9 +321,22 @@ export const useStore = create<StoreState>((set, get) => ({
             patchAssistant((message) => ({ ...message, usage }));
           },
           onStatus: (status) => set({ status }),
+          onProviderChange: (next) => {
+            usedProvider = next;
+            patchAssistant((message) => ({ ...message, model: next.model }));
+            set((current) => ({
+              sessions: current.sessions.map((item) =>
+                item.id === sessionId
+                  ? { ...item, providerId: next.id, model: next.model }
+                  : item,
+              ),
+            }));
+            get().showToast(`Provedor indisponível. Continuando com ${next.name}.`, 'info');
+          },
         },
       });
     } catch (error) {
+      failed = true;
       const aborted = error instanceof DOMException && error.name === 'AbortError';
       const message = error instanceof Error ? error.message : String(error);
       if (aborted) {
@@ -312,6 +357,32 @@ export const useStore = create<StoreState>((set, get) => ({
     } finally {
       const finalSession = get().sessions.find((item) => item.id === sessionId);
       if (finalSession) await saveSession(finalSession);
+      const finalMessage = finalSession?.messages.find(
+        (message) => message.id === assistantMessage.id,
+      );
+      const usage = finalMessage?.usage;
+      const hasPrices =
+        usedProvider.inputPrice !== undefined || usedProvider.outputPrice !== undefined;
+      const costUsd = hasPrices
+        ? ((usage?.promptTokens || 0) / 1_000_000) * (usedProvider.inputPrice || 0) +
+          ((usage?.completionTokens || 0) / 1_000_000) * (usedProvider.outputPrice || 0)
+        : undefined;
+      const record: UsageRecord = {
+        id: uid('u_'),
+        at: Date.now(),
+        providerId: usedProvider.id,
+        providerName: usedProvider.name,
+        model: usedProvider.model,
+        promptTokens: usage?.promptTokens,
+        completionTokens: usage?.completionTokens,
+        totalTokens: usage?.totalTokens,
+        durationMs: Math.round(performance.now() - startedAt),
+        ok: !failed,
+        sessionId,
+        costUsd,
+      };
+      set((current) => ({ usage: [record, ...current.usage].slice(0, 5000) }));
+      void saveUsageRecord(record);
       set({ streaming: false, status: '', abortController: null });
     }
   },
@@ -381,7 +452,7 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   addMemory: async (text, tags = [], source) => {
-    const memory: Memory = {
+    let memory: Memory = {
       id: uid('mem_'),
       text: text.trim(),
       tags,
@@ -389,6 +460,7 @@ export const useStore = create<StoreState>((set, get) => ({
       updatedAt: now(),
       source,
     };
+    memory = await embedMemory(memory, get().settings);
     set((state) => ({ memories: [memory, ...state.memories] }));
     await saveMemoryRecord(memory);
     return memory;
@@ -397,6 +469,107 @@ export const useStore = create<StoreState>((set, get) => ({
   removeMemory: async (id) => {
     set((state) => ({ memories: state.memories.filter((memory) => memory.id !== id) }));
     await deleteMemoryRecord(id);
+  },
+
+  reindexEmbeddings: async () => {
+    const state = get();
+    if (!state.settings.ragEnabled) {
+      get().showToast('Ative a busca semântica nas configurações do agente.', 'info');
+      return;
+    }
+    set({ reindexProgress: { done: 0, total: state.memories.length } });
+    try {
+      const result = await reindexMemories(state.memories, state.settings, (done, total) =>
+        set({ reindexProgress: { done, total } }),
+      );
+      for (const memory of result.updated) await saveMemoryRecord(memory);
+      const updatedById = new Map(result.updated.map((memory) => [memory.id, memory]));
+      set((current) => ({
+        memories: current.memories.map((memory) => updatedById.get(memory.id) || memory),
+      }));
+      if (result.indexed) {
+        get().showToast(`${result.indexed} memória(s) indexada(s).`, 'success');
+      }
+      if (result.failed) {
+        get().showToast(
+          `${result.failed} memória(s) falharam. ${result.error || ''}`.trim(),
+          'error',
+        );
+      }
+    } catch (error) {
+      get().showToast(error instanceof Error ? error.message : String(error), 'error');
+    } finally {
+      set({ reindexProgress: null });
+    }
+  },
+
+  saveRoutine: (routine) => {
+    set((state) => {
+      const exists = state.settings.routines.some((item) => item.id === routine.id);
+      const routines = exists
+        ? state.settings.routines.map((item) => (item.id === routine.id ? routine : item))
+        : [...state.settings.routines, routine];
+      const settings = { ...state.settings, routines };
+      void saveSettings(settings);
+      return { settings };
+    });
+  },
+
+  removeRoutine: (id) => {
+    set((state) => {
+      const settings = {
+        ...state.settings,
+        routines: state.settings.routines.filter((routine) => routine.id !== id),
+      };
+      void saveSettings(settings);
+      return { settings };
+    });
+  },
+
+  runRoutine: async (id) => {
+    const state = get();
+    const routine = state.settings.routines.find((item) => item.id === id);
+    if (!routine || !routine.enabled || runningRoutines.has(id)) return;
+    if (state.streaming) {
+      get().showToast('Aguarde a resposta atual terminar para executar a rotina.', 'info');
+      return;
+    }
+    const provider = getProvider(state.settings);
+    if (provider.kind !== 'ollama' && !provider.apiKey.trim()) {
+      get().showToast('Configure uma API key para executar rotinas.', 'error');
+      return;
+    }
+    runningRoutines.add(id);
+    try {
+      const sessionId = get().newSession();
+      get().renameSession(sessionId, `Rotina: ${routine.name}`);
+      await get().sendMessage(routine.prompt);
+      const result = get().sessions.find((item) => item.id === sessionId);
+      const assistant = [...(result?.messages || [])]
+        .reverse()
+        .find((message) => message.role === 'assistant');
+      if (!assistant || assistant.error) {
+        throw new Error('A rotina terminou com erro. Veja a conversa para os detalhes.');
+      }
+      get().saveRoutine({ ...routine, lastRunAt: Date.now() });
+      if (
+        routine.notify &&
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted'
+      ) {
+        new Notification(`N2 · ${routine.name}`, { body: 'Rotina concluída.' });
+      }
+    } catch (error) {
+      get().showToast(error instanceof Error ? error.message : String(error), 'error');
+    } finally {
+      runningRoutines.delete(id);
+    }
+  },
+
+  clearUsage: async () => {
+    await clearUsage();
+    set({ usage: [] });
+    get().showToast('Histórico de uso apagado.', 'info');
   },
 
   upsertConnector: (connector) => {
@@ -424,7 +597,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
   exportData: async () => {
     const state = get();
-    const bundle = await exportBundle(state.sessions, state.memories, state.settings);
+    const bundle = await exportBundle(state.sessions, state.memories, state.settings, state.usage);
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -442,7 +615,16 @@ export const useStore = create<StoreState>((set, get) => ({
     set({
       sessions: imported.sessions.sort((a, b) => b.updatedAt - a.updatedAt),
       memories: imported.memories.sort((a, b) => b.updatedAt - a.updatedAt),
-      settings: { ...DEFAULT_SETTINGS, ...imported.settings },
+      usage: imported.usage,
+      settings: {
+        ...DEFAULT_SETTINGS,
+        ...imported.settings,
+        fallbackProviderIds: Array.isArray(imported.settings.fallbackProviderIds)
+          ? imported.settings.fallbackProviderIds
+          : [],
+        routines: Array.isArray(imported.settings.routines) ? imported.settings.routines : [],
+        ragEnabled: !!imported.settings.ragEnabled,
+      },
       activeSessionId: imported.sessions[0]?.id || null,
     });
     get().showToast('Backup importado.', 'success');
@@ -453,6 +635,8 @@ export const useStore = create<StoreState>((set, get) => ({
     set({
       sessions: [],
       memories: [],
+      usage: [],
+      reindexProgress: null,
       settings: structuredClone(DEFAULT_SETTINGS),
       activeSessionId: null,
       streaming: false,

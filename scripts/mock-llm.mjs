@@ -19,6 +19,24 @@ function sse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
+/** Deterministic hashed bag-of-words embedding, good enough to exercise RAG locally. */
+function embed(text, dim = 64) {
+  const vector = new Array(dim).fill(0);
+  const words = String(text)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 2);
+  for (const word of words) {
+    let hash = 0;
+    for (const character of word) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+    vector[hash % dim] += 1;
+  }
+  const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0)) || 1;
+  return vector.map((value) => value / norm);
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS);
@@ -27,7 +45,31 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && req.url?.endsWith('/models')) {
     res.writeHead(200, { 'content-type': 'application/json', ...CORS });
-    res.end(JSON.stringify({ data: [{ id: 'llama3.2' }, { id: 'mock-agent' }] }));
+    res.end(JSON.stringify({ data: [{ id: 'llama3.2' }, { id: 'mock-agent' }, { id: 'nomic-embed-text' }] }));
+    return;
+  }
+  if (req.method === 'POST' && req.url?.includes('embeddings')) {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        // ignore
+      }
+      const input = payload.prompt ?? payload.input ?? '';
+      const text = Array.isArray(input) ? input.join(' ') : String(input);
+      const embedding = embed(text);
+      res.writeHead(200, { 'content-type': 'application/json', ...CORS });
+      if (req.url?.includes('/api/embeddings')) {
+        res.end(JSON.stringify({ embedding }));
+      } else {
+        res.end(JSON.stringify({ object: 'list', data: [{ object: 'embedding', index: 0, embedding }], model: payload.model }));
+      }
+    });
     return;
   }
   if (req.method !== 'POST' || !req.url?.includes('chat/completions')) {
